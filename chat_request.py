@@ -6,9 +6,13 @@ with open("config.yaml", 'r') as yaml_file:
 
 BOT = yaml_config['bot']['url']
 
+# get
+r = requests.get("{}".format(BOT))
+print(r)
+
 # get sender
 r = requests.post("{}/start".format(BOT))
-print r
+print(r)
 
 r_json = r.json()
 print("sender: {}".format(r_json['channelId']))
@@ -20,7 +24,7 @@ json_data = {"postback": {"payload": "Btn-1",
            "recipient": {"id": None}
             }
 r = requests.post("{}/send".format(BOT), json=json_data)
-print r
+print(r)
 
 
 

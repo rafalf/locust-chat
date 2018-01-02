@@ -1,3 +1,13 @@
 ---
+# Config for: chat_request.py
 bot:
   url: ${bot-url}
+# Config for: locustfile.py
+# Locust tasks, currently supported:
+# Btn1, Btn2, Btn2
+tasks:
+  Btn1: 6
+  Btn2: 12
+  Btn2: 3
+level:DEBUG
+sender: 2670c032-0795-43fa-9f2e-ad01622d1626
