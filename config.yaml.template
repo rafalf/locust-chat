@@ -3,7 +3,7 @@
 # Btn, Msg
 tasks:
 #  Book it: 1
-  Msg: 100
+  Msg: 10
 fanout: True
 level: DEBUG
 fanout_timeout_cycles: 10
