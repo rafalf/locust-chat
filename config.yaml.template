@@ -1,13 +1,12 @@
 ---
-# Config for: chat_request.py
-bot:
-  url: ${bot-url}
-# Config for: locustfile.py
 # Locust tasks, currently supported:
-# Btn1, Btn2, Btn2
+# Btn, Msg
 tasks:
-  Btn1: 6
-  Btn2: 12
-  Btn2: 3
-level:DEBUG
-sender: 2670c032-0795-43fa-9f2e-ad01622d1626
+#  Book it: 1
+  Msg: 100
+fanout: True
+level: DEBUG
+fanout_timeout_cycles: 10
+fanout_timeout_waits: 0.5
+host: {bot_url}
+host_second: {bot_url}
