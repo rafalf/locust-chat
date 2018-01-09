@@ -4,8 +4,8 @@ import logging
 import logging.config
 from gevent_bayeux import FanoutClient
 import gevent
-import time
 import random
+from random import randint
 
 
 LOGGING_CONFIG = {
@@ -46,7 +46,7 @@ class CustomTaskSet(TaskSet):
 
         self.log = self.parent.log
         if not hasattr(parent, "sender"):
-            self.log.error("{}: sender not set!".format(self.__class__.__name__))
+            self.log.error("%s: sender not set!", self.__class__.__name__)
 
         self.headers = {"content-type": "application/json;charset=UTF-8"}
         self.timeout = self.parent.fanout_timeout_cycles
@@ -57,83 +57,93 @@ class CustomTaskSet(TaskSet):
 
         json_data['sender'] = self.parent.sender
         json_data['postback']['payload'] = self.parent.btn_title
-        self.log.debug("{}: post_btn: {}".format(name, json_data))
+        self.log.debug("%s: post_btn: %s", name, json_data)
 
         with self.client.post(uri, json=json_data, headers=self.headers,
                               catch_response=True,
                               files=files) as response:
-            self.log.info("{}: post response.status_code: {}, posted json: {}".format(name, response.status_code,
-                                                                                  json_data))
+            self.log.info("%s: post response.status_code: %s, posted json: %s", name, response.status_code, json_data)
             return response
+
+    def process_fanout_callbacks(self, uri, name):
+
+        temp_timeout = self.timeout
+
+        while not self.fc.fulfilled:
+
+            self.log.debug("%s: wait (%d) for fanout callback fulfilled, subscriber: %s, counter: (%d)", name, self.timeout_waits,
+                           self.parent.channel_id, temp_timeout)
+            self.fc.process_queue_items()
+
+            gevent.sleep(self.timeout_waits)
+            temp_timeout -= 1
+            if temp_timeout == 0 and not self.fc.calledback:
+                self.log.error(
+                    "%s: fanout did not respond in time, subscriber: %s", name, self.parent.channel_id)
+                break
+            elif temp_timeout == 0 and self.fc.calledback:
+                self.log.info("%s: found no btns to process, subscriber: %s", name, self.parent.channel_id)
+                break
+
+        if self.fc.btns and self.fc.fulfilled:
+            self.post_random_btn(uri, name)
+
+    def post_random_btn(self, uri, name):
+
+        self.log.debug("%s: Processing btns count: %d, subscriber: %s", name, len(self.fc.btns),
+                                                                              self.parent.channel_id)
+
+        json_btn_data = {"postback": {"payload": "{btnTitle}", "title": "{title}"},
+                         "sender": self.parent.channel_id,
+                         "recipient": {"id": None}
+                         }
+
+        btn = random.choice(self.fc.btns)
+        json_btn_data['postback']['payload'] = btn
+        json_btn_data['postback']['title'] = btn
+        self.log.info("%s: Processing random btn: %s of choice: %s, subscriber: %s", name, btn, self.fc.btns,
+                                                                                           self.parent.channel_id)
+
+        with self.client.post(uri, json=json_btn_data, headers=self.headers,
+                              catch_response=True) as response:
+            self.log.info("%s: post response.status_code: %d, posted json_btn_data: %s", name, response.status_code,
+                                                                                     json_btn_data)
+        self.fc.btns = []
+        self.fc.fulfilled = False
 
     def post_msg(self, uri, json_data, name, files=None, **kwargs):
 
         if self.parent.sender:
 
             json_data['sender'] = self.parent.sender
-            self.log.debug("{}: post_msg: {}".format(name, json_data))
+            self.log.debug("%s: post_msg: %s",name, json_data)
 
             if self.parent.fanout and not self.subscribed:
-                self.log.debug("{}: fanout (url, realm): {}, {}".format(name, self.parent.fanout_url,
-                                                                        self.parent.fanout_realm))
+                self.log.debug("%s: fanout (url, realm): %s, %s", name, self.parent.fanout_url,
+                                                                        self.parent.fanout_realm)
                 self.fc = FanoutClient(self.parent.fanout_url)
                 self.fc.subscribe('/' + self.parent.channel_id, 'my_callback')
                 self.fc.log = self.log
                 self.fc.subscriber = self.parent.channel_id
 
                 gevent.spawn(self.fc._execute_greenlet)
-                self.log.info("{}: subscribed by: {} callback: my_callback".format(name, self.parent.channel_id))
+                self.log.info("%s: subscribed by: %s callback: my_callback", name, self.parent.channel_id)
                 self.subscribed = True
             elif self.subscribed:
-                self.log.info("{}: {}: already subscribed".format(name, self.parent.channel_id))
+                self.log.info("%s: subscriber %s already subscribed", name, self.parent.channel_id)
+                self.fc.calledback = False
             else:
-                self.log.info("{}: {}: fanout disabled".format(name, self.parent.sender))
+                self.log.info("%s: sender: %s: fanout disabled", name, self.parent.sender)
 
             with self.client.post(uri, json=json_data, headers=self.headers,
                                   catch_response=True,
                                   files=files) as response:
-                self.log.info("{}: post response.status_code: {}, posted json: {}".format(name, response.status_code,
-                                                                                      json_data))
-            temp_timeout = self.timeout
+                self.log.info("%s: post response.status_code: %d, posted json: %s", name, response.status_code,
+                                                                                      json_data)
             if self.parent.fanout:
-                while not self.fc.fulfilled:
-                    self.log.debug('{}: wait ({}s) for fanout callback, subscriber: {} ({})'.format(name, self.timeout_waits,
-                                                                                               self.parent.channel_id, temp_timeout))
-                    time.sleep(self.timeout_waits)
-                    temp_timeout -= 1
-                    if temp_timeout == 0 and not self.fc.calledback:
-                        self.log.error("{}: fanout did not respond in time, subscriber: {}".format(name, self.parent.channel_id))
-                        break
-                    elif temp_timeout == 0 and self.fc.calledback:
-                        self.log.info("{}: found no btns to process, subscriber: {}".format(name, self.parent.channel_id))
-                        break
-
-                if self.fc.btns:
-                    self.log.debug("{}: Processing btns count: {}, subscriber: {}".format(name, len(self.fc.btns),
-                                                                                    self.parent.channel_id))
-
-                    json_btn_data = {"postback": {"payload": "{btnTitle}", "title": "title"},
-                                     "sender": self.parent.channel_id,
-                                     "recipient": {"id": None}
-                                }
-
-                    btn = random.choice(self.fc.btns)
-                    json_btn_data['postback']['payload'] = btn
-                    self.log.info("{}: Processing random btn: {} of choice: {}, subscriber: {}".format(name, btn, self.fc.btns,
-                                                                                            self.parent.channel_id))
-
-                    with self.client.post(uri, json=json_btn_data, headers=self.headers,
-                                          catch_response=True,
-                                          files=files) as response:
-                        self.log.info("{}: post response.status_code: {}, posted json_btn_data: {}".format(name, response.status_code,
-                                                                                                  json_btn_data))
-
-                    self.fc.btns = []
-                    self.fc.fulfilled = False
-                    self.fc.calledback = False
-
+                self.process_fanout_callbacks(uri, name)
         else:
-            self.log.debug("{}: sender set to None".format(name))
+            self.log.debug("%s: sender set to None", name)
 
 class Btn(CustomTaskSet):
 
@@ -185,20 +195,20 @@ class BaseTaskSet(TaskSet):
     def on_start(self):
         self.log = self.parent.log
         self.log.setLevel(level=logging.getLevelName(self.level))
-        self.log.debug("{}: tasks: {}".format(self.__class__.__name__, self.tasks_conf))
+        self.log.info("%s: new user starting", self.__class__.__name__)
+        self.log.debug("%s: tasks: %s", self.__class__.__name__, self.tasks_conf)
         self.set_sender()
 
     def set_sender(self):
-        with self.client.post('/start', json=None,
-                              catch_response=True) as response:
+        with self.client.post('/start', catch_response=True) as response:
             if response.status_code != 200:
-                self.log.error("{}: /start post response.status_code: {}".format(self.__class__.__name__, response.status_code))
-                self.log.error("{}: /start set sender to None - wont continue on")
+                self.log.error("%s: /start post response.status_code: %s", self.__class__.__name__, response.status_code)
+                self.log.error("%s: /start set sender to None, not processing")
                 self.sender = None
             else:
                 response_json = response.json()
                 self.sender = response_json['channelId']
-                self.log.info("{}: /start sender: {}".format(self.__class__.__name__, self.sender))
+                self.log.info("%s: /start sender: %s", self.__class__.__name__, self.sender)
 
                 if self.fanout:
                     self.channel_id = response.json()['channelId']
@@ -212,15 +222,15 @@ class Locustio(HttpLocust):
     log = logging.getLogger('main')
 
 
-class Debug(HttpLocust):
-    task_set = BaseTaskSet
-    with open("config.yaml", 'r') as yaml_file:
-        yaml_conf = yaml.load(yaml_file)
-    host = yaml_conf['host']
-
-    logging.config.dictConfig(LOGGING_CONFIG)
-    log = logging.getLogger('main')
-
-
-if __name__ == '__main__':
-    Debug().run()
+# class Debug(HttpLocust):
+#     task_set = BaseTaskSet
+#     with open("config.yaml", 'r') as yaml_file:
+#         yaml_conf = yaml.load(yaml_file)
+#     host = yaml_conf['host']
+#
+#     logging.config.dictConfig(LOGGING_CONFIG)
+#     log = logging.getLogger('main')
+#
+#
+# if __name__ == '__main__':
+#     Debug().run()

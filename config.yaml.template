@@ -10,3 +10,4 @@ fanout_timeout_cycles: 10
 fanout_timeout_waits: 0.5
 host: {bot_url}
 host_second: {bot_url}
+test_locustio: True

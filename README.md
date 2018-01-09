@@ -57,4 +57,10 @@ Comment in:
 #     Debug().run()
 ```
 
+### Unlimited (or set to a large number) open files on OS
+
+OS X, Ubuntu:
+* ulimit -S -n 10000 - to set the limit
+* ulimit -a - to check the limit
+
 
