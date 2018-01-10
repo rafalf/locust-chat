@@ -81,11 +81,11 @@ class FanoutClient(python_bayeux.BayeuxClient):
     def my_callback(self, message):
 
         try:
-            self.log.debug("callback: got called back msg: {}".format(message))
+            self.log.debug("callback: got called back msg: %s", message)
             self.queue.put(message)
             self.calledback = True
-        except Exception as err:
-            self.log.error('callback: someting went wrong putting callback: {}'.format(err))
+        except Exception:
+            self.log.exception('callback: opps something went wrong')
 
     def process_queue_items(self):
 
@@ -93,17 +93,30 @@ class FanoutClient(python_bayeux.BayeuxClient):
             message = self.queue.get()
             d = json.loads(message['data'])
             self.log.debug("callback: %s get item from queue: %s", self.subscriber, d)
+
             try:
-                for btn in d['message']['attachment']['payload']['buttons']:
-                    if btn['type'] == "postback":
-                        self.log.debug("callback: subscriber fulfilled: {} postback btn found w/ title: {}".
-                                       format(self.subscriber, btn['title']))
-                        self.btns.append(btn['title'])
-                        self.fulfilled = True
-            except KeyError:
-                self.log.debug("callback: subscriber: %s, btn not found in response", self.subscriber)
+                self.look_up_btns(d['message']['attachment']['payload']['buttons'])
+            except (KeyError, TypeError):
+                self.log.debug("callback: subscriber: %s, payload.buttons not found in response", self.subscriber)
+
+            try:
+                self.look_up_btns(d['message']['attachment']['payload']['elements']['buttons'])
+            except (KeyError, TypeError):
+                self.log.debug("callback: subscriber: %s, payload.elements.buttons not found in response", self.subscriber)
 
             self.queue.task_done()
+
+    def look_up_btns(self, btns):
+
+        try:
+            for btn in btns:
+                if btn['type'] == "postback":
+                    self.log.debug("callback: subscriber fulfilled: %s postback btn found w/ title: %s "
+                                   "in %s", self.subscriber, btn['title'], btns)
+                    self.btns.append(btn['title'])
+                    self.fulfilled = True
+        except KeyError:
+            self.log.debug("callback: subscriber: %s, btns: %s", self.subscriber, btns)
 
     def my_test_callback(self, message):
 

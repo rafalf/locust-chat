@@ -222,15 +222,15 @@ class Locustio(HttpLocust):
     log = logging.getLogger('main')
 
 
-# class Debug(HttpLocust):
-#     task_set = BaseTaskSet
-#     with open("config.yaml", 'r') as yaml_file:
-#         yaml_conf = yaml.load(yaml_file)
-#     host = yaml_conf['host']
-#
-#     logging.config.dictConfig(LOGGING_CONFIG)
-#     log = logging.getLogger('main')
-#
-#
-# if __name__ == '__main__':
-#     Debug().run()
+class Debug(HttpLocust):
+    task_set = BaseTaskSet
+    with open("config.yaml", 'r') as yaml_file:
+        yaml_conf = yaml.load(yaml_file)
+    host = yaml_conf['host']
+
+    logging.config.dictConfig(LOGGING_CONFIG)
+    log = logging.getLogger('main')
+
+
+if __name__ == '__main__':
+    Debug().run()
